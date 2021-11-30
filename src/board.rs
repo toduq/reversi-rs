@@ -15,7 +15,6 @@ impl Board {
         }
     }
 
-    #[allow(unused)]
     pub fn swap(&self) -> Board {
         Board {
             me: self.opp,
@@ -55,4 +54,18 @@ fn to_str(map: &HashMap<String, u64>) -> String {
     }
     buf.push_str("ーーーーーーーーーー");
     buf
+}
+
+// --XXXXX--OOOXX-O-OOOXXOX-OXOXOXXOXXXOXXX--XOXOXX-XXXOOO--OOOOO--
+pub fn parse(s: &str) -> Board {
+    let mut me = 0u64;
+    let mut opp = 0u64;
+    for (idx, c) in s.as_bytes().iter().enumerate() {
+        match c {
+            b'X' => me |= 1 << idx,
+            b'O' => opp |= 1 << idx,
+            _ => {}
+        }
+    }
+    Board { me, opp }
 }
