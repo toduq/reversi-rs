@@ -24,7 +24,7 @@ fn result_of(idx: u8, score: i8, searched: u32, game_end: bool) -> SearchResult 
 const MAX_DEPTH: u8 = 20;
 
 pub fn complete_search(b: &Board) -> SearchResult {
-    let depth = (b.me | b.opp).count_zeros() as u8;
+    let depth = (b.me | b.opp).count_zeros() as u8 + 1;
     let result = rec_search(b, 0, depth, -i8::MAX, i8::MAX, &None).unwrap();
     println!("searched depth#{}, result = {:?}", depth, result);
     result
@@ -70,8 +70,9 @@ fn rec_search(
     beta: i8,
     deadline: &Option<Instant>,
 ) -> Option<SearchResult> {
-    if depth >= max_depth {
-        return Some(result_of(u8::MAX, evaluate(b), 1, false));
+    let occupied = !(b.me | b.opp) == 0;
+    if depth >= max_depth || occupied {
+        return Some(result_of(u8::MAX, evaluate(b), 1, occupied));
     }
     let mut mobility = mobility::get_mobility(b);
     if mobility == 0 {
@@ -90,37 +91,63 @@ fn rec_search(
 
     let mut best: SearchResult = result_of(u8::MAX, alpha, 0, false);
 
-    while mobility != 0 {
-        let idx = mobility.trailing_zeros() as u8;
-        mobility ^= 1 << idx;
-        let next_board = mobility::put(b, idx);
-        let result =
-            rec_search(&next_board, depth + 1, max_depth, -beta, -best.score, &None).unwrap();
-        let score = -result.score;
-        best.searched += result.searched;
-        if score > best.score {
-            best.idx = idx;
-            best.score = score;
-            best.game_end = result.game_end;
+    if depth <= 1 {
+        for idx in ordered_mobility(b, mobility) {
+            let next_board = mobility::put(b, idx);
+            let result =
+                rec_search(&next_board, depth + 1, max_depth, -beta, -best.score, &None).unwrap();
+            let score = -result.score;
+            best.searched += result.searched;
+            if score > best.score {
+                best.idx = idx;
+                best.score = score;
+                best.game_end = result.game_end;
+            }
+            if score > beta {
+                return Some(best);
+            }
+            if depth == 0 {
+                print!(".");
+                std::io::stdout().flush().unwrap();
+            }
+            if let Some(d) = deadline {
+                if Instant::now().saturating_duration_since(*d).as_nanos() > 0 {
+                    return None;
+                }
+            }
         }
-        if score > beta {
-            return Some(best);
-        }
-        if depth == 0 {
-            print!(".");
-            std::io::stdout().flush().unwrap();
-        }
-        if let Some(d) = deadline {
-            if Instant::now().saturating_duration_since(*d).as_nanos() > 0 {
-                return None;
+    } else {
+        while mobility != 0 {
+            let idx = mobility.trailing_zeros() as u8;
+            mobility ^= 1 << idx;
+            let next_board = mobility::put(b, idx);
+            let result =
+                rec_search(&next_board, depth + 1, max_depth, -beta, -best.score, &None).unwrap();
+            let score = -result.score;
+            best.searched += result.searched;
+            if score > best.score {
+                best.idx = idx;
+                best.score = score;
+                best.game_end = result.game_end;
+            }
+            if score > beta {
+                return Some(best);
+            }
+            if depth == 0 {
+                print!(".");
+                std::io::stdout().flush().unwrap();
+            }
+            if let Some(d) = deadline {
+                if Instant::now().saturating_duration_since(*d).as_nanos() > 0 {
+                    return None;
+                }
             }
         }
     }
-    // for idx in ordered_mobility(b, mobility) {}
     Some(best)
 }
 
-#[cfg(test)]
+/// fastet first search
 fn ordered_mobility(b: &Board, mobility: u64) -> Vec<u8> {
     let mut mobilities: Vec<(u8, u32)> = (0..64)
         .filter(|idx| mobility >> idx & 1 == 1)

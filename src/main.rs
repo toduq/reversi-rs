@@ -38,15 +38,18 @@ fn run_game() {
 
 /// https://github.com/primenumber/issen-rs/blob/21cae3698e4e79d527e5bb867f7ef111d73b3373/problem/fforum-1-19.obf
 fn solve_ffo() {
-    let b = board::parse("--XXXXX--OOOXX-O-OOOXXOX-OXOXOXXOXXXOXXX--XOXOXX-XXXOOO--OOOOO--");
-    println!("{}", b);
-    let started = std::time::Instant::now();
-    let result = search::complete_search(&b);
-    println!(
-        "search finished in {}ms, {:?}",
-        started.elapsed().as_millis(),
-        result
-    );
-    assert_eq!(result.score, 18);
-    assert_eq!(result.idx, 100);
+    #[rustfmt::skip]
+    let cases = vec![
+        ("--XXXXX--OOOXX-O-OOOXXOX-OXOXOXXOXXXOXXX--XOXOXX-XXXOOO--OOOOO--", 18, 62),
+        // ("-XXXXXX---XOOOO--XOXXOOX-OOOOOOOOOOOXXOOOOOXXOOX--XXOO----XXXXX-", 10, 24),
+    ];
+    for (s, score, idx) in cases {
+        let b = board::parse(s);
+        println!("{}", b);
+        let started = std::time::Instant::now();
+        let result = search::complete_search(&b);
+        println!("search finished in {}ms", started.elapsed().as_millis());
+        assert_eq!(result.score, score);
+        assert_eq!(result.idx, idx);
+    }
 }
