@@ -25,10 +25,14 @@ pub fn find_best_move(b: &Board) -> u8 {
     let deadline = Instant::now().checked_add(Duration::from_millis(1000));
     for depth in 2..=MAX_DEPTH {
         if let Some(r) = rec_search(b, 0, depth, -i8::MAX, i8::MAX, &deadline) {
+            if r.searched == result.searched {
+                println!("search completed.");
+                return result.idx;
+            }
             result = r;
             println!("searched in depth = {}, result = {:?}", depth, result);
         } else {
-            println!("aborted in depth = {}", depth);
+            println!("aborted while depth = {}", depth);
             break;
         }
     }
