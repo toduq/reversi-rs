@@ -1,5 +1,6 @@
 use super::board::Board;
 use super::mobility;
+use std::cmp::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -134,15 +135,21 @@ fn debug_beta_cut(depth: u8) {
 }
 
 fn evaluate(b: &Board) -> i8 {
-    let m_stones = b.me.count_ones();
-    let o_stones = b.opp.count_ones();
-    if m_stones + o_stones < 50 {
+    let m = b.me.count_ones() as i8;
+    let o = b.opp.count_ones() as i8;
+    if m + o < 50 {
         // evaluate by mobility
         mobility::get_mobility(b).count_ones() as i8
             - mobility::get_mobility(&b.swap()).count_ones() as i8
     } else {
         // evaluate by score
-        (m_stones - o_stones) as i8
+        // Using `m - o` as score is not appropriate in order to pass FFO.
+        // https://github.com/primenumber/issen-rs/blob/master/src/board.rs#L231
+        match m.cmp(&o) {
+            Ordering::Greater => 64 - 2 * o,
+            Ordering::Less => -64 + 2 * m,
+            Ordering::Equal => 0,
+        }
     }
 }
 
