@@ -121,8 +121,8 @@ mod test {
             };
             println!("Base\n{}", b);
             println!("Idx : {}\n", idx);
-            println!("Expected\n{}", &expected.swap());
-            println!("Actual\n{}", &actual.swap());
+            println!("Expected\n{}", &expected.pass());
+            println!("Actual\n{}", &actual.pass());
             assert_eq!(actual, expected);
         }
     }

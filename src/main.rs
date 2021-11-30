@@ -7,29 +7,45 @@ mod search;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let mut opts = Options::new();
-    opts.optopt("", "ffo", "Solve FFO", "COUNT");
+    opts.optflag("", "solve-ffo", "Solve FFO");
+    opts.optopt("", "ffo-start", "FFO start #", "NUMBER");
+    opts.optopt("", "ffo-end", "FFO end #", "NUMBER");
+    opts.optopt("b", "board", "Start board", "BOARD_EXPRESSION");
     let matches = opts
         .parse(&args[1..])
         .unwrap_or_else(|f| panic!("{}", f.to_string()));
-    if matches.opt_present("ffo") {
-        solve_ffo(matches.opt_str("ffo").unwrap().parse().unwrap());
+    if matches.opt_present("solve-ffo") {
+        solve_ffo(
+            matches
+                .opt_str("ffo-start")
+                .unwrap_or_else(|| "1".to_owned())
+                .parse()
+                .unwrap(),
+            matches
+                .opt_str("ffo-end")
+                .unwrap_or_else(|| "100".to_owned())
+                .parse()
+                .unwrap(),
+        );
     } else {
-        run_game();
+        run_game(matches.opt_str("board"));
     }
 }
 
-fn run_game() {
-    let mut b = board::Board::new();
+fn run_game(b_str: Option<String>) {
+    let mut b = b_str
+        .map(|s| board::parse(&s))
+        .unwrap_or_else(board::Board::new);
     println!("{}\n", b);
     loop {
         let mob = mobility::get_mobility(&b);
-        let opp_mob = mobility::get_mobility(&b.swap());
+        let opp_mob = mobility::get_mobility(&b.pass());
         if mob > 0 {
-            let best_move = search::find_best_move(&b, 3000);
+            let best_move = search::find_best_move(&b, 30000);
             b = mobility::put(&b, best_move);
         } else if opp_mob > 0 {
             println!("pass");
-            b = b.swap();
+            b = b.pass();
         } else {
             break;
         }
@@ -41,17 +57,15 @@ fn run_game() {
 ///
 /// https://github.com/abulmo/edax-reversi/tree/master/problem
 /// https://github.com/primenumber/issen-rs/blob/a77b757662630b0dfe2573fe5ac084659cbb9781/src/main.rs
-fn solve_ffo(count: usize) {
+fn solve_ffo(start: usize, end: usize) {
     let mut results = vec![];
-    for (problem, line) in FFO_CASES.trim().split('\n').enumerate() {
-        if problem >= count {
-            break;
-        }
+    let cases: Vec<(usize, &str)> = FFO_CASES.trim().split('\n').enumerate().collect();
+    for (problem, line) in &cases[(start - 1)..=(end - 1)] {
         println!("\n\nFFO#{} {:?}", problem + 1, line);
         let elems: Vec<&str> = line.split(' ').collect();
         let mut b = board::parse(elems[0]);
         if elems[1] == "O;" {
-            b = b.swap();
+            b = b.pass();
         }
         let expected: Vec<&str> = elems[2].trim_end_matches(';').split(':').collect();
         let expected_idx =
@@ -61,7 +75,7 @@ fn solve_ffo(count: usize) {
         let started = std::time::Instant::now();
         let result = search::complete_search(&b);
         println!("search finished in {}ms", started.elapsed().as_millis());
-        let passed = result.idx == expected_idx && result.score == expected_score;
+        let passed = result.score == expected_score;
         if !passed {
             println!(
                 "[FAILED] expected:{}@{}, actual:{}@{}",

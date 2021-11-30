@@ -1,5 +1,6 @@
 use super::board::Board;
 use super::mobility;
+use std::cmp::min;
 use std::cmp::Ordering;
 use std::time::Duration;
 use std::time::Instant;
@@ -37,7 +38,7 @@ pub fn find_best_move(b: &Board, ms: u64) -> u8 {
     }
     let mut result = result_of(u8::MAX, 0, 0, false);
     let deadline = Instant::now().checked_add(Duration::from_millis(ms));
-    for depth in 2..=MAX_DEPTH {
+    for depth in 5..=MAX_DEPTH {
         if let Some(r) = rec_search(b, 0, depth, -i8::MAX, i8::MAX, &deadline) {
             result = r;
             println!("searched depth#{}, result = {:?}", depth, result);
@@ -72,16 +73,20 @@ fn rec_search(
 ) -> Option<SearchResult> {
     let occupied = !(b.me | b.opp) == 0;
     if depth >= max_depth || occupied {
-        return Some(result_of(u8::MAX, evaluate(b), 1, occupied));
+        let score = evaluate(b);
+        // debug::eval(depth, score);
+        return Some(result_of(u8::MAX, score, 1, occupied));
     }
+
     let mut mobility = mobility::get_mobility(b);
     if mobility == 0 {
-        if mobility::get_mobility(&b.swap()) == 0 {
+        let passed = b.pass();
+        if mobility::get_mobility(&passed) == 0 {
             // game end
             return Some(result_of(u8::MAX, evaluate(b), 1, true));
         } else {
             // pass
-            let r = rec_search(&b.swap(), depth + 1, max_depth, -beta, -alpha, &None).unwrap();
+            let r = rec_search(&passed, depth, max_depth, -beta, -alpha, &None).unwrap();
             return Some(SearchResult {
                 score: -r.score,
                 ..r
@@ -89,14 +94,20 @@ fn rec_search(
         }
     }
 
-    let mut best: SearchResult = result_of(u8::MAX, alpha, 0, false);
-
+    let mut best: SearchResult = result_of(u8::MAX, -i8::MAX, 0, false);
     while mobility != 0 {
         let idx = mobility.trailing_zeros() as u8;
         mobility ^= 1 << idx;
         let next_board = mobility::put(b, idx);
-        let result =
-            rec_search(&next_board, depth + 1, max_depth, -beta, -best.score, &None).unwrap();
+        let result = rec_search(
+            &next_board,
+            depth + 1,
+            max_depth,
+            -beta,
+            min(-best.score, -alpha),
+            &None,
+        )
+        .unwrap();
         let score = -result.score;
         best.searched += result.searched;
         if score > best.score {
@@ -116,31 +127,13 @@ fn rec_search(
     Some(best)
 }
 
-#[allow(unused)]
-fn debug_progress(depth: u8, idx: u8, score: i8, a: i8, b: i8) {
-    println!(
-        "{}#{} @{} => {} in [{},{}]",
-        " ".repeat(depth.into()),
-        depth,
-        idx,
-        score,
-        a,
-        b
-    );
-}
-
-#[allow(unused)]
-fn debug_beta_cut(depth: u8) {
-    println!("{}#{} beta cut", " ".repeat(depth.into()), depth,)
-}
-
 fn evaluate(b: &Board) -> i8 {
     let m = b.me.count_ones() as i8;
     let o = b.opp.count_ones() as i8;
     if m + o < 50 {
         // evaluate by mobility
         mobility::get_mobility(b).count_ones() as i8
-            - mobility::get_mobility(&b.swap()).count_ones() as i8
+            - mobility::get_mobility(&b.pass()).count_ones() as i8
     } else {
         // evaluate by score
         // Using `m - o` as score is not appropriate in order to pass FFO.

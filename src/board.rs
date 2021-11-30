@@ -15,7 +15,7 @@ impl Board {
         }
     }
 
-    pub fn swap(&self) -> Board {
+    pub fn pass(&self) -> Board {
         Board {
             me: self.opp,
             opp: self.me,
@@ -26,10 +26,16 @@ impl Board {
 impl std::fmt::Display for Board {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut map = HashMap::new();
-        map.insert("ｏ".to_string(), self.me);
-        map.insert("ｘ".to_string(), self.opp);
+        map.insert("ｘ".to_string(), self.me);
+        map.insert("ｏ".to_string(), self.opp);
         map.insert("＿".to_string(), mobility::get_mobility(self));
-        write!(f, "{}\n{:?}", to_str(&map), self)
+        write!(
+            f,
+            "{}\nSer : {}\nDbg : {:?}\n",
+            to_str(&map),
+            serialize(self),
+            self
+        )
     }
 }
 
@@ -68,4 +74,18 @@ pub fn parse(s: &str) -> Board {
         }
     }
     Board { me, opp }
+}
+
+pub fn serialize(b: &Board) -> String {
+    let mut s = "".to_owned();
+    for idx in 0..64 {
+        if b.me >> idx & 1 == 1 {
+            s.push('X');
+        } else if b.opp >> idx & 1 == 1 {
+            s.push('O');
+        } else {
+            s.push('-');
+        }
+    }
+    s
 }
