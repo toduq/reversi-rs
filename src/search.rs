@@ -1,6 +1,5 @@
 use super::board::Board;
 use super::mobility;
-use std::io::Write;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -91,73 +90,47 @@ fn rec_search(
 
     let mut best: SearchResult = result_of(u8::MAX, alpha, 0, false);
 
-    if depth <= 1 {
-        for idx in ordered_mobility(b, mobility) {
-            let next_board = mobility::put(b, idx);
-            let result =
-                rec_search(&next_board, depth + 1, max_depth, -beta, -best.score, &None).unwrap();
-            let score = -result.score;
-            best.searched += result.searched;
-            if score > best.score {
-                best.idx = idx;
-                best.score = score;
-                best.game_end = result.game_end;
-            }
-            if score > beta {
-                return Some(best);
-            }
-            if depth == 0 {
-                print!(".");
-                std::io::stdout().flush().unwrap();
-            }
-            if let Some(d) = deadline {
-                if Instant::now().saturating_duration_since(*d).as_nanos() > 0 {
-                    return None;
-                }
-            }
+    while mobility != 0 {
+        let idx = mobility.trailing_zeros() as u8;
+        mobility ^= 1 << idx;
+        let next_board = mobility::put(b, idx);
+        let result =
+            rec_search(&next_board, depth + 1, max_depth, -beta, -best.score, &None).unwrap();
+        let score = -result.score;
+        best.searched += result.searched;
+        if score > best.score {
+            best.idx = idx;
+            best.score = score;
+            best.game_end = result.game_end;
         }
-    } else {
-        while mobility != 0 {
-            let idx = mobility.trailing_zeros() as u8;
-            mobility ^= 1 << idx;
-            let next_board = mobility::put(b, idx);
-            let result =
-                rec_search(&next_board, depth + 1, max_depth, -beta, -best.score, &None).unwrap();
-            let score = -result.score;
-            best.searched += result.searched;
-            if score > best.score {
-                best.idx = idx;
-                best.score = score;
-                best.game_end = result.game_end;
-            }
-            if score > beta {
-                return Some(best);
-            }
-            if depth == 0 {
-                print!(".");
-                std::io::stdout().flush().unwrap();
-            }
-            if let Some(d) = deadline {
-                if Instant::now().saturating_duration_since(*d).as_nanos() > 0 {
-                    return None;
-                }
+        if score >= beta {
+            return Some(best);
+        }
+        if let Some(d) = deadline {
+            if Instant::now().saturating_duration_since(*d).as_nanos() > 0 {
+                return None;
             }
         }
     }
     Some(best)
 }
 
-/// fastet first search
-fn ordered_mobility(b: &Board, mobility: u64) -> Vec<u8> {
-    let mut mobilities: Vec<(u8, u32)> = (0..64)
-        .filter(|idx| mobility >> idx & 1 == 1)
-        .map(|idx| {
-            let next_board = mobility::put(b, idx);
-            (idx, mobility::get_mobility(&next_board).count_ones())
-        })
-        .collect();
-    mobilities.sort_by(|a, b| b.1.cmp(&a.1));
-    mobilities.iter().map(|m| m.0).collect()
+#[allow(unused)]
+fn debug_progress(depth: u8, idx: u8, score: i8, a: i8, b: i8) {
+    println!(
+        "{}#{} @{} => {} in [{},{}]",
+        " ".repeat(depth.into()),
+        depth,
+        idx,
+        score,
+        a,
+        b
+    );
+}
+
+#[allow(unused)]
+fn debug_beta_cut(depth: u8) {
+    println!("{}#{} beta cut", " ".repeat(depth.into()), depth,)
 }
 
 fn evaluate(b: &Board) -> i8 {
@@ -176,14 +149,6 @@ fn evaluate(b: &Board) -> i8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_ordered_mobility() {
-        let b = Board::new();
-        let actual = ordered_mobility(&b, mobility::get_mobility(&b));
-        let expected = vec![29, 43, 45];
-        assert_eq!(actual, expected);
-    }
 
     #[test]
     fn test_find_best_move() {
