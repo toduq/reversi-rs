@@ -1,6 +1,4 @@
-use super::board;
 use super::board::Board;
-use std::collections::HashMap;
 
 // https://techblog.cccmk.co.jp/entry/2020/12/07/170000
 pub fn get_mobility(b: &Board) -> u64 {
@@ -58,20 +56,14 @@ fn get_flip(b: &Board, position: u64) -> u64 {
 
 pub fn put(b: &Board, me_idx: u8) -> Board {
     let position = 1u64 << me_idx;
+    if (b.me | b.opp) & position != 0 {
+        panic!("called put with occupied place : {}\n{}", me_idx, b);
+    }
     let flip = get_flip(b, position);
     Board {
         me: b.opp ^ flip,
         opp: b.me ^ (position | flip),
     }
-}
-
-pub fn print_movility(b: &Board) -> String {
-    let mobility = get_mobility(b);
-    let mut map = HashMap::new();
-    map.insert("ｏ".to_string(), b.me);
-    map.insert("ｘ".to_string(), b.opp);
-    map.insert("＿".to_string(), mobility);
-    board::to_str(&map)
 }
 
 #[cfg(test)]
@@ -89,7 +81,7 @@ mod test {
         ];
         for (me, opp, m) in cases {
             let b = Board { me, opp };
-            println!("{}", print_movility(&b));
+            println!("{}", b);
             assert_eq!(get_mobility(&b), m);
         }
     }
@@ -127,10 +119,10 @@ mod test {
                 me: next_me,
                 opp: next_opp,
             };
-            println!("Base\n{}", print_movility(&b));
+            println!("Base\n{}", b);
             println!("Idx : {}\n", idx);
-            println!("Expected\n{}", print_movility(&expected.swap()));
-            println!("Actual\n{}", print_movility(&actual.swap()));
+            println!("Expected\n{}", &expected.swap());
+            println!("Actual\n{}", &actual.swap());
             assert_eq!(actual, expected);
         }
     }

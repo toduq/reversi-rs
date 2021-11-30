@@ -1,3 +1,4 @@
+use super::mobility;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,11 +29,12 @@ impl std::fmt::Display for Board {
         let mut map = HashMap::new();
         map.insert("ｏ".to_string(), self.me);
         map.insert("ｘ".to_string(), self.opp);
-        write!(f, "{}", to_str(&map))
+        map.insert("＿".to_string(), mobility::get_mobility(self));
+        write!(f, "{}\n{:?}", to_str(&map), self)
     }
 }
 
-pub fn to_str(map: &HashMap<String, u64>) -> String {
+fn to_str(map: &HashMap<String, u64>) -> String {
     let mut buf = "ーーーーーーーーーー\n".to_string();
     for y in 0..8 {
         buf.push_str("| ");
@@ -51,6 +53,6 @@ pub fn to_str(map: &HashMap<String, u64>) -> String {
         }
         buf.push_str(" |\n")
     }
-    buf.push_str("ーーーーーーーーーー\n");
+    buf.push_str("ーーーーーーーーーー");
     buf
 }
