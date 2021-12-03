@@ -103,7 +103,12 @@ fn rec_search(
             }
         }
     } else {
-        for idx in ordered_mobility(b, mobility) {
+        let mut moves: [(u8, u8); 30] = [(u8::MAX, u8::MAX); 30];
+        ordered_mobility(b, mobility, &mut moves);
+        for (idx, m) in moves {
+            if idx == u8::MAX || m == u8::MAX {
+                continue;
+            }
             if search_for_idx(b, idx, depth, max_depth, alpha, beta, &mut best) {
                 break;
             }
@@ -150,16 +155,17 @@ fn search_for_idx(
     false
 }
 
-fn ordered_mobility(b: &Board, mobility: u64) -> Vec<u8> {
-    let mut mobilities: Vec<(u8, u32)> = (0..64)
-        .filter(|idx| mobility >> idx & 1 == 1)
-        .map(|idx| {
-            let next_board = mobility::put(b, idx);
-            (idx, mobility::get_mobility(&next_board).count_ones())
-        })
-        .collect();
-    mobilities.sort_by(|a, b| a.1.cmp(&b.1));
-    mobilities.iter().map(|m| m.0).collect()
+fn ordered_mobility(b: &Board, mobility: u64, moves: &mut [(u8, u8); 30]) {
+    let mut i = 0usize;
+    for idx in 0..64 {
+        if mobility >> idx & 1 == 0 {
+            continue;
+        }
+        let next_board = mobility::put(b, idx);
+        moves[i] = (idx, mobility::get_mobility(&next_board).count_ones() as u8);
+        i += 1;
+    }
+    moves[0..i].sort_by(|a, b| a.1.cmp(&b.1));
 }
 
 fn evaluate(b: &Board) -> i8 {
