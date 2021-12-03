@@ -76,7 +76,7 @@ fn rec_search(
         return Some(result_of(u8::MAX, evaluate(b), 1, occupied == 0));
     }
 
-    let mut mobility = mobility::get_mobility(b);
+    let mobility = mobility::get_mobility(b);
     if mobility == 0 {
         let passed = b.pass();
         if mobility::get_mobility(&passed) == 0 {
@@ -94,28 +94,23 @@ fn rec_search(
     }
 
     let mut best: SearchResult = result_of(u8::MAX, -i8::MAX, 0, false);
+    let mut moves: [u8; 30] = [0; 30];
     if max_depth - depth <= 6 {
-        while mobility != 0 {
-            let idx = mobility.trailing_zeros() as u8;
-            mobility ^= 1 << idx;
-            if search_for_idx(b, idx, depth, max_depth, alpha, beta, &mut best) {
-                break;
-            }
-        }
+        naive_ordering(mobility, &mut moves);
     } else {
-        let mut moves: [(u8, u8); 30] = [(u8::MAX, u8::MAX); 30];
-        ordered_mobility(b, mobility, &mut moves);
-        for (idx, m) in moves {
-            if idx == u8::MAX || m == u8::MAX {
-                continue;
-            }
-            if search_for_idx(b, idx, depth, max_depth, alpha, beta, &mut best) {
-                break;
-            }
-            if let Some(d) = deadline {
-                if Instant::now().saturating_duration_since(*d).as_nanos() > 0 {
-                    return None;
-                }
+        fastest_first_ordering(b, mobility, &mut moves);
+    }
+
+    for idx in moves {
+        if idx == u8::MAX {
+            break;
+        }
+        if search_for_idx(b, idx, depth, max_depth, alpha, beta, &mut best) {
+            break;
+        }
+        if let Some(d) = deadline {
+            if Instant::now().saturating_duration_since(*d).as_nanos() > 0 {
+                return None;
             }
         }
     }
@@ -155,17 +150,41 @@ fn search_for_idx(
     false
 }
 
-fn ordered_mobility(b: &Board, mobility: u64, moves: &mut [(u8, u8); 30]) {
-    let mut i = 0usize;
+fn naive_ordering(mobility: u64, moves: &mut [u8; 30]) {
+    let mut i = 0;
+    let masks: [u64; 3] = [
+        0x8100_0000_0000_0081, // corner
+        0x3C3C_FFFF_FFFF_3C3C, // others
+        0x42C3_0000_0000_C342, // c + x
+    ];
+    for mask in masks {
+        let mut masked_mobility = mobility & mask;
+        while masked_mobility != 0 {
+            let idx = masked_mobility.trailing_zeros() as u8;
+            masked_mobility ^= 1 << idx;
+            moves[i] = idx;
+            i += 1;
+        }
+    }
+    moves[i] = u8::MAX;
+}
+
+fn fastest_first_ordering(b: &Board, mobility: u64, moves: &mut [u8; 30]) {
+    let mut m: [(u8, u8); 30] = [(u8::MAX, u8::MAX); 30];
+    let mut i = 0;
     for idx in 0..64 {
         if mobility >> idx & 1 == 0 {
             continue;
         }
         let next_board = mobility::put(b, idx);
-        moves[i] = (idx, mobility::get_mobility(&next_board).count_ones() as u8);
+        m[i] = (idx, mobility::get_mobility(&next_board).count_ones() as u8);
         i += 1;
     }
-    moves[0..i].sort_by(|a, b| a.1.cmp(&b.1));
+    m[0..i].sort_by(|a, b| a.1.cmp(&b.1));
+    for (j, (idx, _)) in m.into_iter().enumerate() {
+        moves[j] = idx;
+    }
+    moves[i] = u8::MAX;
 }
 
 fn evaluate(b: &Board) -> i8 {
