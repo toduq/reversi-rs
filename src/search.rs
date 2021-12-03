@@ -5,7 +5,7 @@ use std::cmp::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SearchResult {
     pub idx: u8,
     pub score: i8,
@@ -71,11 +71,9 @@ fn rec_search(
     beta: i8,
     deadline: &Option<Instant>,
 ) -> Option<SearchResult> {
-    let occupied = !(b.me | b.opp) == 0;
-    if depth >= max_depth || occupied {
-        let score = evaluate(b);
-        // debug::eval(depth, score);
-        return Some(result_of(u8::MAX, score, 1, occupied));
+    let occupied = !(b.me | b.opp);
+    if depth >= max_depth || occupied == 0 {
+        return Some(result_of(u8::MAX, evaluate(b), 1, occupied == 0));
     }
 
     let mut mobility = mobility::get_mobility(b);
@@ -86,45 +84,82 @@ fn rec_search(
             return Some(result_of(u8::MAX, evaluate(b), 1, true));
         } else {
             // pass
-            let r = rec_search(&passed, depth, max_depth, -beta, -alpha, &None).unwrap();
-            return Some(SearchResult {
-                score: -r.score,
-                ..r
+            return rec_search(&passed, depth, max_depth, -beta, -alpha, &None).map(|r| {
+                SearchResult {
+                    score: -r.score,
+                    ..r
+                }
             });
         }
     }
 
     let mut best: SearchResult = result_of(u8::MAX, -i8::MAX, 0, false);
-    while mobility != 0 {
-        let idx = mobility.trailing_zeros() as u8;
-        mobility ^= 1 << idx;
-        let next_board = mobility::put(b, idx);
-        let result = rec_search(
-            &next_board,
-            depth + 1,
-            max_depth,
-            -beta,
-            min(-best.score, -alpha),
-            &None,
-        )
-        .unwrap();
-        let score = -result.score;
-        best.searched += result.searched;
-        if score > best.score {
-            best.idx = idx;
-            best.score = score;
-            best.game_end = result.game_end;
+    if max_depth - depth <= 6 {
+        while mobility != 0 {
+            let idx = mobility.trailing_zeros() as u8;
+            mobility ^= 1 << idx;
+            if search_for_idx(b, idx, depth, max_depth, alpha, beta, &mut best) {
+                break;
+            }
         }
-        if score >= beta {
-            return Some(best);
-        }
-        if let Some(d) = deadline {
-            if Instant::now().saturating_duration_since(*d).as_nanos() > 0 {
-                return None;
+    } else {
+        for idx in ordered_mobility(b, mobility) {
+            if search_for_idx(b, idx, depth, max_depth, alpha, beta, &mut best) {
+                break;
+            }
+            if let Some(d) = deadline {
+                if Instant::now().saturating_duration_since(*d).as_nanos() > 0 {
+                    return None;
+                }
             }
         }
     }
     Some(best)
+}
+
+#[inline]
+fn search_for_idx(
+    b: &Board,
+    idx: u8,
+    depth: u8,
+    max_depth: u8,
+    alpha: i8,
+    beta: i8,
+    best: &mut SearchResult,
+) -> bool {
+    let next_board = mobility::put(b, idx);
+    let result = rec_search(
+        &next_board,
+        depth + 1,
+        max_depth,
+        -beta,
+        min(-best.score, -alpha),
+        &None,
+    )
+    .unwrap();
+    let score = -result.score;
+    best.searched += result.searched;
+    if score > best.score {
+        best.idx = idx;
+        best.score = score;
+        best.game_end = result.game_end;
+    }
+    if score >= beta {
+        return true;
+    }
+    false
+}
+
+fn ordered_mobility(b: &Board, mobility: u64) -> Vec<u8> {
+    let mut mobilities: Vec<(u8, u32)> = (0..64)
+        .filter(|idx| mobility >> idx & 1 == 1)
+        .map(|idx| {
+            let next_board = mobility::put(b, idx);
+            (idx, mobility::get_mobility(&next_board).count_ones())
+        })
+        .collect();
+    mobilities.sort_by(|a, b| a.1.cmp(&b.1));
+    mobilities.iter().map(|m| m.0).collect()
 }
 
 fn evaluate(b: &Board) -> i8 {
