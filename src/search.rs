@@ -1,5 +1,6 @@
 use super::board::Board;
 use super::mobility;
+use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::time::Duration;
 use std::time::Instant;
@@ -99,17 +100,59 @@ fn rec_search(
         fastest_first_ordering(b, mobility, &mut moves)
     };
 
-    let mut best: SearchResult = result_of(u8::MAX, alpha, 0, false);
-    let mut first = true;
-    for idx in moves[0..move_size].iter() {
-        if search_for_idx(b, *idx, depth, max_depth, beta, &mut best, first) {
-            break;
-        }
-        first = false;
-        if let Some(d) = deadline {
-            if Instant::now().saturating_duration_since(*d).as_nanos() > 0 {
-                return None;
+    let next = mobility::put(b, moves[0]);
+    let mut best = search_for_idx(&next, depth, max_depth, alpha, beta, true);
+    best.score *= -1;
+    best.score = std::cmp::max(best.score, alpha);
+    if best.score >= beta {
+        return Some(best);
+    }
+
+    if max_depth - depth <= 6 {
+        // no parallel execution
+        for idx in moves[1..move_size].iter() {
+            let next = mobility::put(b, *idx);
+            let result = search_for_idx(&next, depth, max_depth, best.score, beta, false);
+            best.searched += result.searched;
+            let score = -result.score;
+            if score > best.score {
+                best.idx = *idx;
+                best.score = score;
+                best.game_end = result.game_end;
             }
+            if score >= beta {
+                return Some(best);
+            }
+        }
+    } else {
+        // parallel execution with YBWC(Young Brother Waiting Concept
+        let best_mutex = std::sync::Arc::new(std::sync::Mutex::new(&mut best)); // need clone?
+        moves[1..move_size]
+            .into_par_iter()
+            .try_for_each(move |idx| -> Option<()> {
+                let next = mobility::put(b, *idx);
+                let alpha = { best_mutex.lock().unwrap().score };
+                let result = search_for_idx(&next, depth, max_depth, alpha, beta, false);
+                let mut best = best_mutex.lock().unwrap();
+                best.searched += result.searched;
+                let score = -result.score;
+                if score > best.score {
+                    best.idx = *idx;
+                    best.score = score;
+                    best.game_end = result.game_end;
+                };
+                if score >= beta {
+                    None
+                } else {
+                    Some(())
+                }
+            });
+    }
+
+    // This position does not make sence...
+    if let Some(d) = deadline {
+        if Instant::now().saturating_duration_since(*d).as_nanos() > 0 {
+            return None;
         }
     }
     Some(best)
@@ -158,43 +201,28 @@ fn fastest_first_ordering(b: &Board, mobility: u64, moves: &mut [u8; 30]) -> usi
 /// return false if search continues
 #[inline]
 fn search_for_idx(
-    b: &Board,
-    idx: u8,
+    next: &Board,
     depth: u8,
     max_depth: u8,
+    alpha: i8,
     beta: i8,
-    best: &mut SearchResult,
     first: bool,
-) -> bool {
-    let next = mobility::put(b, idx);
-    let alpha = best.score;
-
-    let mut result: SearchResult;
+) -> SearchResult {
     if first {
         // actual search
-        result = rec_search(&next, depth + 1, max_depth, -beta, -alpha, &None).unwrap();
-        best.searched += result.searched;
+        rec_search(next, depth + 1, max_depth, -beta, -alpha, &None).unwrap()
     } else {
         // null window search
-        result = rec_search(&next, depth + 1, max_depth, -alpha - 1, -alpha, &None).unwrap();
-        best.searched += result.searched;
-        if alpha < -result.score && -result.score < beta {
+        let nws_result = rec_search(next, depth + 1, max_depth, -alpha - 1, -alpha, &None).unwrap();
+        if alpha < -nws_result.score && -nws_result.score < beta {
             // actual search
-            result = rec_search(&next, depth + 1, max_depth, -beta, -alpha, &None).unwrap();
-            best.searched += result.searched;
+            let mut result = rec_search(next, depth + 1, max_depth, -beta, -alpha, &None).unwrap();
+            result.searched += nws_result.searched;
+            result
+        } else {
+            nws_result
         }
     }
-    let score = -result.score;
-    if score > best.score {
-        best.idx = idx;
-        best.score = score;
-        best.game_end = result.game_end;
-    }
-    if score >= beta {
-        return true;
-    }
-
-    false
 }
 
 fn evaluate(b: &Board) -> i8 {
