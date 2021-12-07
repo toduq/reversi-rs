@@ -2,6 +2,7 @@ use getopts::Options;
 
 mod board;
 mod mobility;
+mod monte_carlo;
 mod search;
 
 fn main() {
@@ -10,6 +11,7 @@ fn main() {
     opts.optflag("", "solve-ffo", "Solve FFO");
     opts.optopt("", "ffo-start", "FFO start #", "NUMBER");
     opts.optopt("", "ffo-end", "FFO end #", "NUMBER");
+    opts.optflag("m", "monte-carlo", "Debug MonteCarlo");
     opts.optopt("b", "board", "Start board", "BOARD_EXPRESSION");
     let matches = opts
         .parse(&args[1..])
@@ -27,6 +29,8 @@ fn main() {
                 .parse()
                 .unwrap(),
         );
+    } else if matches.opt_present("monte-carlo") {
+        monte_carlo::search(&board::Board::new());
     } else {
         run_game(matches.opt_str("board"));
     }

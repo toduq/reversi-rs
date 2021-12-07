@@ -25,9 +25,8 @@ const MAX_DEPTH: u8 = 20;
 
 pub fn complete_search(b: &Board) -> SearchResult {
     let depth = (b.me | b.opp).count_zeros() as u8 + 1;
-    let result = rec_search(b, 0, depth, -i8::MAX, i8::MAX, &None).unwrap();
-    println!("searched depth#{}, result = {:?}", depth, result);
-    result
+    rec_search(b, 0, depth, -i8::MAX, i8::MAX, &None).unwrap()
+    // println!("searched depth#{}, result = {:?}", depth, result);
 }
 
 pub fn find_best_move(b: &Board, ms: u64) -> u8 {

@@ -26,6 +26,39 @@ pub fn get_mobility(b: &Board) -> u64 {
     candidate & !(b.me | b.opp)
 }
 
+pub fn put(b: &Board, me_idx: u8) -> Board {
+    let position = 1u64 << me_idx;
+    if (b.me | b.opp) & position != 0 {
+        panic!("called put with occupied place : {}\n{}", me_idx, b);
+    }
+    let flip = get_flip(b, position);
+    Board {
+        me: b.opp ^ flip,
+        opp: b.me ^ (position | flip),
+    }
+}
+
+pub fn iter(m: u64) -> MobilityIterator {
+    MobilityIterator { m }
+}
+
+pub struct MobilityIterator {
+    m: u64,
+}
+
+impl Iterator for MobilityIterator {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<u8> {
+        if self.m == 0 {
+            return None;
+        }
+        let idx = self.m.trailing_zeros() as u8;
+        self.m ^= 1 << idx;
+        Some(idx)
+    }
+}
+
 // https://techblog.cccmk.co.jp/entry/2020/12/07/170000
 fn get_flip(b: &Board, position: u64) -> u64 {
     let masks: [(i32, u64); 4] = [
@@ -52,18 +85,6 @@ fn get_flip(b: &Board, position: u64) -> u64 {
         }
     }
     flip
-}
-
-pub fn put(b: &Board, me_idx: u8) -> Board {
-    let position = 1u64 << me_idx;
-    if (b.me | b.opp) & position != 0 {
-        panic!("called put with occupied place : {}\n{}", me_idx, b);
-    }
-    let flip = get_flip(b, position);
-    Board {
-        me: b.opp ^ flip,
-        opp: b.me ^ (position | flip),
-    }
 }
 
 #[cfg(test)]
